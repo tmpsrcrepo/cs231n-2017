@@ -3,3 +3,4 @@
 *.DS_store
 *.so
 *.pyx
+cs231n/datasets/coco_captioninig/*
