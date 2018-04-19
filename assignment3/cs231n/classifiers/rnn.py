@@ -137,14 +137,26 @@ class CaptioningRNN(object):
         # defined above to store loss and gradients; grads[k] should give the      #
         # gradients for self.params[k].                                            #
         ############################################################################
+        ### forward pass ###
         # affine layer
         h0, affine_cache = affine_forward(features, W_proj, b_proj)
         # add start to the first column
         embed_input, embed_cache = word_embedding_forward(captions_in, W_embed)
         # create hidden state
-        h, rnn_cache = rnn_forward(embed_input, h0, Wx, Wh, b)
+        h = None
+        if self.cell_type == 'rnn':
+            h, rnn_cache = rnn_forward(embed_input, h0, Wx, Wh, b)
+        else: # LSTM
+            h, lstm_cache = lstm_forward(embed_input, h0, h0, Wx, Wh, b)
         temporal_score, temporal_cache = temporal_affine_forward(h, W_vocab, b_vocab)
-        loss, grads = temporal_softmax_loss(temporal_score, captions_out, mask)
+        loss, dx = temporal_softmax_loss(temporal_score, captions_out, mask)
+
+        ### backward pass ###
+        dh, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dx, temporal_cache)
+        if self.cell_type == 'rnn':
+            dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(dh, rnn_cache)
+            grads['W_embed'] = word_embedding_backward(dx, embed_cache)
+            dx, grads['W_proj'], grads['b_proj'] = affine_backward(dh0, affine_cache)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -176,6 +188,7 @@ class CaptioningRNN(object):
           of captions should be the first sampled word, not the <START> token.
         """
         N = features.shape[0]
+        D = features.shape[1]
         captions = self._null * np.ones((N, max_length), dtype=np.int32)
 
         # Unpack parameters
@@ -205,7 +218,20 @@ class CaptioningRNN(object):
         # functions; you'll need to call rnn_step_forward or lstm_step_forward in #
         # a loop.                                                                 #
         ###########################################################################
-        pass
+        # affine layer
+        h, affine_cache = affine_forward(features, W_proj, b_proj)
+        predictions = np.zeros(N, dtype=int)
+        predictions[0] = self._start
+        for t in range(max_length):
+            embed_input, _ =word_embedding_forward(predictions, W_embed)
+            if self.cell_type == 'rnn':
+                h, rnn_cache = rnn_step_forward(embed_input, h, Wx, Wh, b)
+            # TODO: LSTM
+            score, affine_cache = affine_forward(h, W_vocab, b_vocab)
+            max_index = np.argmax(score, axis=1)
+            captions[:,t] = max_index
+            predictions = max_index
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
