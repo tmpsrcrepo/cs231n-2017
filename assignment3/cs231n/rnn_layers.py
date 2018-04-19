@@ -281,7 +281,15 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
     # TODO: Implement the forward pass for a single timestep of an LSTM.        #
     # You may want to use the numerically stable sigmoid implementation above.  #
     #############################################################################
-    pass
+    a = np.dot(x, Wx) + np.dot(prev_h, Wh) + b
+    a_list = np.hsplit(a, 4)
+    i = sigmoid(a_list[0])
+    f = sigmoid(a_list[1])
+    o = sigmoid(a_list[2])
+    g = np.tanh(a_list[3])
+    
+    next_c = f * prev_c + i * g
+    next_h = o * np.tanh(next_c)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -343,12 +351,23 @@ def lstm_forward(x, h0, Wx, Wh, b):
     - h: Hidden states for all timesteps of all sequences, of shape (N, T, H)
     - cache: Values needed for the backward pass.
     """
-    h, cache = None, None
+    h, cache = None, {}
     #############################################################################
     # TODO: Implement the forward pass for an LSTM over an entire timeseries.   #
     # You should use the lstm_step_forward function that you just defined.      #
     #############################################################################
-    pass
+    (N, T_, D) = x.shape
+    (_, H) = h0.shape
+    c0 = np.zeros(h0.shape)
+    h = np.zeros((N, T_, H))
+    c = np.zeros(h.shape)
+
+    h[:,0,:] = h0
+    for t in range(T_):
+        if t == 0:
+            h[:,t,:], c[:,t,:],cache[t] = lstm_step_forward(x[:,t,:], h0, c0, Wx, Wh, b)
+        else:
+            h[:,t,:], c[:,t,:], cache[t] = lstm_step_forward(x[:,t,:], h[:,t-1,:], c[:,t-1,:], Wx, Wh, b)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
