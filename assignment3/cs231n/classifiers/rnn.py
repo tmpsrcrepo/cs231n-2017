@@ -244,7 +244,7 @@ class CaptioningRNN(object):
         if not self.use_batchNorm:
             h, affine_cache = affine_forward(features, W_proj, b_proj)
         else:
-            h0, affine_cache = affine_bn_relu_forward(features, W_proj, b_proj, gamma, beta, {'mode':'test'})
+            h, affine_cache = affine_bn_relu_forward(features, W_proj, b_proj, gamma, beta, {'mode':'test'})
 
         c = np.zeros(h.shape)
 
