@@ -231,7 +231,7 @@ class CaptioningRNN(object):
             if self.cell_type == 'rnn':
                 h, rnn_cache = rnn_step_forward(embed_input, h, Wx, Wh, b)
             else:
-                h, lstm_cache = lstm_step_forward(embed_input, h, c, Wx, Wh, b)
+                h, c, lstm_cache = lstm_step_forward(embed_input, h, c, Wx, Wh, b)
             score, affine_cache = affine_forward(h, W_vocab, b_vocab)
             max_index = np.argmax(score, axis=1)
             captions[:,t] = max_index
