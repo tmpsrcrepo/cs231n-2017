@@ -3,6 +3,7 @@ from builtins import object
 import numpy as np
 
 from cs231n.layers import *
+from cs231n.layer_utils import *
 from cs231n.rnn_layers import *
 
 
@@ -18,7 +19,7 @@ class CaptioningRNN(object):
     Note that we don't use any regularization for the CaptioningRNN.
     """
 
-    def __init__(self, word_to_idx, input_dim=512, wordvec_dim=128,
+    def __init__(self, word_to_idx, input_dim=512, wordvec_dim=128, reg=0.0, use_batchNorm=False,
                  hidden_dim=128, cell_type='rnn', dtype=np.float32):
         """
         Construct a new CaptioningRNN instance.
@@ -41,6 +42,8 @@ class CaptioningRNN(object):
         self.word_to_idx = word_to_idx
         self.idx_to_word = {i: w for w, i in word_to_idx.items()}
         self.params = {}
+        self.reg = reg
+        self.use_batchNorm = use_batchNorm
 
         vocab_size = len(word_to_idx)
 
@@ -115,6 +118,10 @@ class CaptioningRNN(object):
         # Weight and bias for the hidden-to-vocab transformation.
         W_vocab, b_vocab = self.params['W_vocab'], self.params['b_vocab']
 
+        gamma = np.ones(W_proj.shape[1])
+
+        beta = np.zeros(W_proj.shape[1])
+
         loss, grads = 0.0, {}
         ############################################################################
         # TODO: Implement the forward and backward passes for the CaptioningRNN.   #
@@ -139,7 +146,11 @@ class CaptioningRNN(object):
         ############################################################################
         ### forward pass ###
         # affine layer
-        h0, affine_cache = affine_forward(features, W_proj, b_proj)
+        if not self.use_batchNorm:
+            h0, affine_cache = affine_forward(features, W_proj, b_proj)
+        else:
+            h0, affine_cache = affine_bn_relu_forward(features, W_proj, b_proj, gamma, beta, {'mode':'train'})
+
         # add start to the first column
         embed_input, embed_cache = word_embedding_forward(captions_in, W_embed)
         # create hidden state
@@ -151,6 +162,8 @@ class CaptioningRNN(object):
         temporal_score, temporal_cache = temporal_affine_forward(h, W_vocab, b_vocab)
         loss, dx = temporal_softmax_loss(temporal_score, captions_out, mask)
 
+        # loss += 0.5 * self.reg * np.sum(Wx**2) + np.sum(Wh**2)
+
         ### backward pass ###
         dh, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dx, temporal_cache)
         if self.cell_type == 'rnn':
@@ -158,7 +171,10 @@ class CaptioningRNN(object):
         else: #LSTM
             dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = lstm_backward(dh, lstm_cache)
         grads['W_embed'] = word_embedding_backward(dx, embed_cache)
-        dx, grads['W_proj'], grads['b_proj'] = affine_backward(dh0, affine_cache)
+        if not self.use_batchNorm:
+            dx, grads['W_proj'], grads['b_proj'] = affine_backward(dh0, affine_cache)
+        else:
+            dx, grads['W_proj'], grads['b_proj'], d_gamma, d_beta = affine_bn_relu_backward(dh0, affine_cache)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -198,6 +214,10 @@ class CaptioningRNN(object):
         W_embed = self.params['W_embed']
         Wx, Wh, b = self.params['Wx'], self.params['Wh'], self.params['b']
         W_vocab, b_vocab = self.params['W_vocab'], self.params['b_vocab']
+        bn_params = {'mode':'test'}
+
+        gamma = np.ones(W_proj.shape[1])
+        beta = np.zeros(W_proj.shape[1])
 
         ###########################################################################
         # TODO: Implement test-time sampling for the model. You will need to      #
@@ -221,7 +241,11 @@ class CaptioningRNN(object):
         # a loop.                                                                 #
         ###########################################################################
         # affine layer
-        h, affine_cache = affine_forward(features, W_proj, b_proj)
+        if not self.use_batchNorm:
+            h, affine_cache = affine_forward(features, W_proj, b_proj)
+        else:
+            h0, affine_cache = affine_bn_relu_forward(features, W_proj, b_proj, gamma, beta, {'mode':'test'})
+
         c = np.zeros(h.shape)
 
         predictions = np.zeros(N, dtype=int)
